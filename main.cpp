@@ -1,11 +1,8 @@
 #include <dllentry.h>
 #include <log.h>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <utility>
 #include "settings.h"
 #include "playerdb.h"
+#include <hook.h>
 #include <command.h>
 #include <Command/Command.h>
 #include <Command/CommandRegistry.h>
@@ -14,17 +11,17 @@
 #include <Command/CommandParameterData.h>
 #include <Command/CommandOutput.h>
 #include <Command/CommandOrigin.h>
-//#include <Actor.h>
 #include <Actor/ServerPlayer.h>
 #include <Packet/AddActorPacket.h>
-#include <Packet/RemoveActorPacket.h>
-#include <Packet/BossEventPacket.h>
-#include <Packet/MoveActorAbsolutePacket.h>
-#include <Packet/UpdateAttributesPacket.h>
+//#include <Packet/AddPlayerPacket.h>
+//#include <Packet/UpdateAttributesPacket.h>
 #include <Packet/SetActorDataPacket.h>
+//#include <Packet/PlayerSkinPacket.h>
 #include <Actor/ActorUniqueID.h>
-#include <Core/DataItem.h>
+//#include <Core/DataItem.h>
 #include <Core/PacketSender.h>
+#include <Packet\AddPlayerPacket.h>
+#include <Packet\PlayerSkinPacket.h>
 
 DEF_LOGGER("EZMod1");
 DEFAULT_SETTINGS(settings);
@@ -207,21 +204,87 @@ public:
       //auto dim = actor.player->getDimensionId().value;
       auto pos = actor.player->getPos();
       //spawn packet
-      AddActorPacket pkt;
+      /*
+        PMMP Plugin PHP code by me that works fine
+
+        $uuid = UUID::fromRandom();
+        $player = $event->getPlayer();
+        $pk = new PlayerSkinPacket();
+        $pk->skin = SkinAdapterSingleton::get()->toSkinData($player->getSkin());
+        $pk->uuid = $uuid;
+        $player->dataPacket($pk);
+
+        $pk = new AddPlayerPacket();
+        $pk->uuid = $uuid;
+        $pk->username =$player->getDisplayName();
+        $pk->entityRuntimeId = Entity::$entityCount++;
+        $pk->position = $player->asVector3();
+        $pk->motion = new Vector3();
+        $pk->yaw = $player->yaw;
+        $pk->pitch = $player->pitch;
+        $pk->item = $player->getInventory()->getItemInHand();
+        $pk->metadata = $player->getDataPropertyManager()->getAll();
+        $player->dataPacket($pk);
+        */
+      ItemStack *is = new ItemStack();
+
+      //init player skin
+      using namespace mce;
+      ImageUsage imgusg;
+      unsigned char skinData[2048] = {0xFF};
+      unsigned height              = 32;
+      unsigned width = 64;
+      Blob blob         = Blob(skinData,(size_t) sizeof(skinData));
+      Image *skinTexture;
+      skinTexture->copyRawImage(blob);
+      skinTexture->setImageDescription(width, height, ImageFormat::RGB, imgusg);
+
+      SerializedSkin skin;
+      skin.skin_id = "Standard_Custom";
+      skin.setImageData(skinTexture);
+
+      PlayerSkinPacket spkt;
+      spkt.uuid = mce::UUID();
+      //spkt.skin.
+
       SynchedActorData syncedata;
-      pkt.uid    = newEid.value;
-      pkt.rid    = newEid.value;
-      pkt.def_id = ActorDefinitionIdentifier{"minecraft:player"};
-      pkt.pos = pos;
       syncedata.append<int64_t>(DataItem::Id::FLAGS, 0);
       syncedata.append<short>(DataItem::Id::AIR, 400);
       syncedata.append<short>(DataItem::Id::MAX_AIR, 400);
       syncedata.append<int64_t>(DataItem::Id::LEAD_HOLDER, -1);
       syncedata.append<std::string>(DataItem::Id::NAMETAG, "FakePlayer");
+      syncedata.append<std::string>(DataItem::Id::SCORE_TAG, "FakePlayer");
+      //syncedata.append<char>(DataItem::Id::ALWAYS_SHOW_NAMETAG, 1);//TODO causes error
       syncedata.append<float>(DataItem::Id::SCALE, 1);
+      AddPlayerPacket pkt;
+      pkt.uid = newEid.value;
+      pkt.username = "FakePlayer";
+      pkt.rid      = newEid.value;
+      pkt.pos      = pos;
+      pkt.speed    = Vec3{0.0, 0.0, 0.0};
+      pkt.head_yaw = 0.0;
+      pkt.rot           = Vec2{0.0, 0.0};
+      pkt.selected_item = *is; //TODO
       pkt.syncedata = &syncedata;
       actor.player->sendNetworkPacket(pkt);
-      //
+
+      //AddActorPacket pkt;
+      //SynchedActorData syncedata;
+      //pkt.uid    = newEid.value;
+      //pkt.rid    = newEid.value;
+      //pkt.def_id = ActorDefinitionIdentifier{"minecraft:player"};
+      //pkt.pos = pos;
+      //syncedata.append<int64_t>(DataItem::Id::FLAGS, 0);
+      //syncedata.append<short>(DataItem::Id::AIR, 400);
+      //syncedata.append<short>(DataItem::Id::MAX_AIR, 400);
+      //syncedata.append<int64_t>(DataItem::Id::LEAD_HOLDER, -1);
+      //syncedata.append<std::string>(DataItem::Id::NAMETAG, "FakePlayer");
+      //syncedata.append<std::string>(DataItem::Id::SCORE_TAG, "FakePlayer");
+      ////syncedata.append<char>(DataItem::Id::ALWAYS_SHOW_NAMETAG, (char)1);//TODO, causes error
+      //syncedata.append<float>(DataItem::Id::SCALE, 1);
+      //pkt.syncedata = &syncedata;
+      //actor.player->sendNetworkPacket(pkt);
+      
       output.success("Spawned %d with eid %s", {(int)eat, newEid.value});
     } break;
     default: {
@@ -259,3 +322,13 @@ void ServerStart() {
     return true;
   });*/
 }
+
+
+//TClasslessInstanceHook(
+//    void, "?handle@ServerNetworkHandler@@UEAAXAEBVNetworkIdentifier@@AEBVLoginPacket@@@Z", NetworkIdentifier *netid,
+//    PlayerSkinPacket *packet) {
+//  auto &db = Mod::PlayerDatabase::GetInstance();
+//  auto it  = db.Find(*netid);
+//  if (!it) return;
+//  original(this, netid, packet);
+//}
